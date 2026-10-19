@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Centro de coordinación post-emergencia | Propuesta Reto 9</title>
+  <!-- Leaflet (mapa) · misma versión e integridad que la maqueta original -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="locked">
+
+  <!-- ============ ACCESO ============ -->
+  <div class="login" id="login">
+    <form class="login-card" id="login-form" autocomplete="off">
+      <div class="login-brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z" fill="currentColor"/></svg>
+        </div>
+        <div>
+          <h1>Centro de coordinación post-emergencia</h1>
+          <p>Acceso de operadores</p>
+        </div>
+      </div>
+      <label for="login-user">Usuario o nombre</label>
+      <input id="login-user" type="text" placeholder="Ejemplo: kcarranza" required>
+      <label for="login-pass">Contraseña</label>
+      <input id="login-pass" type="password" required>
+      <p class="login-error" id="login-error" role="alert"></p>
+      <button class="btn btn-primary" type="submit">Ingresar</button>
+      <p class="login-note">Cada acción queda registrada en la bitácora con el nombre del operador.</p>
+    </form>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <!-- Ventana «Por que esta recomendación» -->
+  <div class="modal" id="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <button class="modal-close" id="modal-close" type="button" aria-label="Cerrar">&times;</button>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z" fill="currentColor"/></svg>
+      </div>
+      <div>
+        <h1>Centro de coordinación post-emergencia</h1>
+        <div class="event-filter">
+          <label for="event-filter">Siniestro</label>
+          <select id="event-filter"></select>
+          <span id="area-name"></span>
+        </div>
+      </div>
+    </div>
+    <div class="top-right">
+      <div class="conn" id="conn"><span class="conn-dot"></span><span id="conn-text">Conectando con el servicio de rutas</span></div>
+      <button class="top-btn" id="sound-btn" type="button" aria-pressed="true">Sonido: activado</button>
+      <div class="operator"><span id="operator-name">Sin sesión</span> <small>Turno activo · <span id="clock">--:--</span> · <button class="link-light" id="logout-btn" type="button">Cerrar sesión</button></small></div>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <nav class="sidebar" aria-label="Secciones">
+      <button class="nav-item active" data-view="operacion">Operación</button>
+      <button class="nav-item" data-view="recursos">Recursos y zonas</button>
+      <button class="nav-item" data-view="bitacora">Bitácora</button>
+      <button class="nav-item" data-view="como">Cómo funciona</button>
+      <div class="sidebar-foot">
+        <p>Maqueta de la propuesta. Reportes, unidades e instalaciones son de ejemplo; el mapa y las rutas son reales.</p>
+        <button class="link-btn" id="reset-btn" type="button">Reiniciar demostración</button>
+      </div>
+    </nav>
+
+    <main>
+
+      <!-- ============ VISTA: OPERACION ============ -->
+      <section class="view active" id="view-operacion">
+
+        <div class="statusbar">
+          <div class="stats" id="stats"></div>
+          <div class="actions">
+            <button class="btn btn-primary" id="new-report-btn" type="button">Registrar reporte</button>
+            <button class="btn btn-ghost" id="simulate-btn" type="button">Simular llegada de reportes</button>
+          </div>
+        </div>
+
+        <div class="notice">El personal de turno decide. El sistema ordena los casos y recomienda qué unidad enviar y por dónde; nada se despacha sin aprobación.</div>
+
+        <div class="ops-grid">
+
+          <section class="panel queue-panel">
+            <div class="panel-head">
+              <div>
+                <h2>Casos por atender</h2>
+                <p class="sub" id="queue-sub"></p>
+              </div>
+              <button class="btn btn-small btn-primary" id="approve-all" type="button">Aprobar todo</button>
+            </div>
+            <div class="seg" id="status-filter" role="group" aria-label="Filtrar casos">
+              <button type="button" class="seg-btn active" data-status="todos">Todos</button>
+              <button type="button" class="seg-btn" data-status="sin">Sin unidad</button>
+              <button type="button" class="seg-btn" data-status="con">Unidad enviada</button>
+            </div>
+            <div class="incoming" id="incoming" hidden></div>
+            <div class="plan-status" id="plan-status"></div>
+            <ol class="queue" id="queue"></ol>
+          </section>
+
+          <div class="ops-right">
+            <section class="panel map-panel">
+              <div class="map-tools">
+                <span class="map-hint" id="map-hint">Selecciona un caso para ver la ruta recomendada.</span>
+                <div class="map-buttons">
+                  <label class="check"><input type="checkbox" id="toggle-heat"> Zonas con más demanda</label>
+                  <button class="btn btn-small btn-ghost" id="block-mode" type="button" aria-pressed="false">Marcar vía bloqueada</button>
+                </div>
+              </div>
+              <div id="map"></div>
+              <div class="legend">
+                <span><i class="dot crit"></i>Crítica</span>
+                <span><i class="dot high"></i>Alta</span>
+                <span><i class="dot mod"></i>Moderada</span>
+                <span><i class="dot done"></i>Unidad en camino</span>
+                <span><i class="dot block"></i>Bloqueo</span>
+                <span><i class="line route"></i>Ruta recomendada</span>
+              </div>
+              <div class="legend legend-fac" id="legend-fac"></div>
+            </section>
+
+            <section class="panel side-panel" id="side-panel"></section>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ VISTA: RECURSOS ============ -->
+      <section class="view" id="view-recursos">
+        <div class="view-head">
+          <h2>Recursos y zonas</h2>
+          <p>Estado de cada unidad y dónde se concentra la demanda.</p>
+        </div>
+        <div class="two-col">
+          <section class="panel">
+            <div class="panel-head"><h3>Unidades</h3><p class="sub" id="units-sub"></p></div>
+            <div id="units"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h3>Zonas con más demanda</h3><p class="sub">Suma de prioridades de los casos activos</p></div>
+            <div id="zones"></div>
+          </section>
+        </div>
+      </section>
+
+      <!-- ============ VISTA: BITACORA ============ -->
+      <section class="view" id="view-bitacora">
+        <div class="view-head">
+          <h2>Bitácora</h2>
+          <p>Registro de cada reporte recibido y de cada decisión, con el operador que la tomó.</p>
+        </div>
+        <section class="panel"><ol class="log" id="log"></ol></section>
+      </section>
+
+      <!-- ============ VISTA: COMO FUNCIONA ============ -->
+      <section class="view" id="view-como">
+        <div class="view-head">
+          <h2>Cómo funciona</h2>
+          <p>Lógica de la priorización y viabilidad técnica de la propuesta.</p>
+        </div>
+        <div class="two-col">
+          <section class="panel prose">
+            <h3>Flujo de trabajo</h3>
+            <ol>
+              <li><b>Recibir</b> reportes de cualquier canal: 911, SMS, WhatsApp, radio o brigadistas.</li>
+              <li><b>Agrupar duplicados.</b> Varios reportes del mismo hecho se fusionan y aumentan la confianza.</li>
+              <li><b>Priorizar</b> con un puntaje visible que se actualiza con el paso del tiempo.</li>
+              <li><b>Recomendar</b> la unidad adecuada que llega más rápido, con una ruta que evita las vías bloqueadas.</li>
+              <li><b>Aprobar.</b> El operador acepta, ajusta o descarta. Todo queda en la bitácora con su nombre.</li>
+            </ol>
+
+            <h3>Cómo se calcula la prioridad</h3>
+            <p class="formula">(Gravedad + Personas + Vulnerables + Tiempo sin atención) × Confianza ± Ajuste manual</p>
+            <table class="table" id="type-table"></table>
+            <ul>
+              <li><b>Confianza:</b> un reporte sin verificar ×0.85; dos reportes ×0.95; tres o más, o verificado en campo, ×1.0.</li>
+              <li><b>Datos incompletos:</b> si no se sabe cuántas personas hay, se asumen 3 y el caso queda marcado.</li>
+              <li><b>Sin acceso no significa menos prioridad.</b> Si no se puede llegar por tierra, el sistema propone despejar la vía con maquinaria.</li>
+              <li><b>El operador puede elegir otra unidad.</b> Con «Elegir otra unidad» se ve cada unidad libre con su tiempo de llegada; la elección queda en la bitácora.</li>
+            </ul>
+          </section>
+
+          <section class="panel prose">
+            <h3>Viabilidad técnica</h3>
+            <ul>
+              <li><b>Mapa real:</b> Leaflet con cartografía de OpenStreetMap o Esri, en vista de calles o satélite.</li>
+              <li><b>Rutas reales:</b> motor OSRM. Se piden rutas alternativas y se descartan las que pasan por un bloqueo reportado. Si todas lo cruzan, se busca un desvío por calles cercanas. Para elegir la unidad se usa la matriz de tiempos de OSRM.</li>
+              <li><b>Sin conexión:</b> la priorización corre en el equipo. Si el servicio de rutas no responde, los tiempos se estiman por distancia y la operación continúa.</li>
+              <li><b>En producción:</b> servidor OSRM propio en el COE con el mapa del país descargado, para no depender de servicios públicos ni de internet.</li>
+              <li><b>Entrada multicanal:</b> formulario de operador, pasarela SMS, WhatsApp Business y aplicación para brigadistas con envío diferido.</li>
+              <li><b>Interoperabilidad:</b> alertas en el estándar CAP (Common Alerting Protocol).</li>
+              <li><b>Costo:</b> componentes de código abierto. La inversión es la implantación, la capacitación y la carga de datos base.</li>
+            </ul>
+            <h3>Qué es simulado en esta maqueta</h3>
+            <p>Reportes, unidades e instalaciones son ejemplos. Los tiempos de OSRM corresponden a condiciones normales de tránsito. El cierre de cada tarea lo registra el operador. El acceso con usuario y contraseña es solo demostrativo: en producción se valida en un servidor.</p>
+          </section>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="config.js"></script>
+  <script src="escenario.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
